@@ -1,7 +1,54 @@
-- pipeline.id: nginx-pipeline
-  path.config: "/usr/share/logstash/pipeline/10-nginx-logs.conf"
+# 1. Ana Yönlendirici (Trafik Polisi)
+# (Dosya: 00-main-router.conf)
+- pipeline.id: main-router
+  path.config: "/usr/share/logstash/pipeline/00-main-router.conf"
   pipeline.workers: 2
 
-- pipeline.id: java-app-pipeline
-  path.config: "/usr/share/logstash/pipeline/20-java-app.conf"
+# 2. Windows Logon Uzmanı
+# (Dosya: 10-logon-pipeline.conf)
+- pipeline.id: logon-pipeline
+  path.config: "/usr/share/logstash/pipeline/10-logon-pipeline.conf"
+  pipeline.workers: 1
+
+# 3. Nginx Uzmanı
+# (Dosya: 10-nginx-processor.conf)
+- pipeline.id: nginx-pipeline
+  path.config: "/usr/share/logstash/pipeline/10-nginx-processor.conf"
+  pipeline.workers: 1
+
+# 4. Java Uzmanı
+# (Dosya: 20-java-processor.conf)
+- pipeline.id: java-pipeline
+  path.config: "/usr/share/logstash/pipeline/20-java-processor.conf"
+  pipeline.workers: 1
+
+# 5. Windows Update Uzmanı
+# (Dosya: 20-windows-update-pipeline.conf)
+- pipeline.id: windows-update-pipeline
+  path.config: "/usr/share/logstash/pipeline/20-windows-update-pipeline.conf"
+  pipeline.workers: 1
+
+# 6. Windows Defender Uzmanı
+# (Dosya: 30-windows-defender-pipeline.conf)
+- pipeline.id: windows-defender-pipeline
+  path.config: "/usr/share/logstash/pipeline/30-windows-defender-pipeline.conf"
+  pipeline.workers: 1
+
+# 7. Fortinet Uzmanı
+# (Dosya: 40-fortinet-pipeline.conf)
+- pipeline.id: fortinet-pipeline
+  path.config: "/usr/share/logstash/pipeline/40-fortinet-pipeline.conf"
+  pipeline.workers: 1
+
+# --- DÜZELTME: E-posta pipeline'ını geçici olarak devre dışı bırak ---
+# 8. E-posta Çıkışı
+#- pipeline.id: email-output-pipeline
+#  path.config: "/usr/share/logstash/pipeline/90-email-output.conf"
+#  pipeline.workers: 1
+# --- DÜZELTME SONU ---
+
+# 9. Ana Elasticsearch Çıkışı
+# (Dosya: 99-es-output.conf)
+- pipeline.id: es-output-pipeline
+  path.config: "/usr/share/logstash/pipeline/99-es-output.conf"
   pipeline.workers: 2

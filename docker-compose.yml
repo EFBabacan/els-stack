@@ -105,7 +105,6 @@ services:
       - elk-net
     depends_on:
       setup:
-        # Şifreler ayarlanmadan Kibana'yı başlatma
         condition: service_completed_successfully
 
   logstash:
@@ -113,26 +112,56 @@ services:
     container_name: logstash
     user: "0"
     environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
+      - GMAIL_USERNAME=${GMAIL_USERNAME}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - TZ=Europe/Istanbul
     volumes:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
       - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
       - ./logstash/pipeline:/usr/share/logstash/pipeline
       - ./certs/elastic-stack-ca.crt:/usr/share/logstash/config/certs/elastic-stack-ca.crt
     ports:
-      - "5001:5001"
-      - "5002:5002"
+      - "5044:5044"
+      - "5045:5045"
     networks:
       - elk-net
     depends_on:
       setup:
-         # Şifreler ayarlanmadan Logstash'i başlatma
         condition: service_completed_successfully
 
-volumes:
-  es-data:
-    driver: local
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${ELASTIC_VERSION}
+    container_name: filebeat
+    user: "0" 
+    volumes:
+      - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ./certs/elastic-stack-ca.crt:/usr/share/filebeat/certs/elastic-stack-ca.crt:ro
+      - ./logs/nginx:/var/log/nginx:ro
+      - ./logs/java-app:/var/log/java-app:ro
+      - filebeat-data:/usr/share/filebeat/data
+      
+    command: >
+      bash -c "
+        echo 'Fixing file permissions...';
+        chmod go-w /usr/share/filebeat/filebeat.yml;
+        echo 'Starting Filebeat...';
+        filebeat -e
+      "
+      
+    networks:
+      - elk-net
+    depends_on:
+      logstash:
+        condition: service_started
 
 networks:
   elk-net:
     driver: bridge
+
+volumes:
+  es-data:
+    driver: local
+  filebeat-data:
+    driver: local

@@ -1,0 +1,5 @@
+{"timestamp":"2025-11-05T19:00:00Z","level":"INFO","thread":"main","logger":"com.example.App","log":"Application started successfully"}
+{"timestamp":"2025-11-05T19:01:00Z","level":"WARN","thread":"worker-1","logger":"com.example.Cache","log":"Cache miss for key user_123"}
+{"timestamp":"2025-11-05T19:02:00Z","level":"ERROR","thread":"worker-2","logger":"com.example.Database","log":"Connection pool exhausted"}
+{"@timestamp": "2025-11-05T14:15:00Z", "agent": {"name": "DC01-SERVER"}, "user": {"name": "TestUser"}, "winlog": {"task": "Logon", "event_data": {"LogonType": "10", "TargetUserName": "Administrator", "IpAddress": "1.2.3.4"}}}
+{"@timestamp": "2025-11-05T15:20:00Z", "agent": {"name": "ANA-SUNUCU"}, "winlog": {"task": "Logon", "event_data": {"LogonType": "10", "TargetUserName": "Administrator", "IpAddress": "1.2.3.4"}}}

@@ -1,0 +1,44 @@
+filebeat.inputs:
+  # Nginx logları
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/nginx/*.log
+    tags: ["nginx"]
+    fields:
+      log_type: nginx
+    fields_under_root: true
+
+  # Java uygulama logları
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/java-app/*.log
+    tags: ["java"]
+    fields:
+      log_type: java
+    fields_under_root: true
+    
+    # JSON formatındaki loglar için
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: log
+
+# Filebeat registry
+filebeat.registry.path: /usr/share/filebeat/data/registry
+
+# TEK LOGSTASH OUTPUT - 5044 portuna hepsini gönder
+output.logstash:
+  hosts: ["logstash:5044"]
+  worker: 2
+  loadbalance: false
+
+# Logging
+logging.level: info
+logging.to_stderr: true
+
+# Processors
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_docker_metadata: ~
