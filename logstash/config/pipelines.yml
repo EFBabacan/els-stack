@@ -1,0 +1,7 @@
+- pipeline.id: nginx-pipeline
+  path.config: "/usr/share/logstash/pipeline/10-nginx-logs.conf"
+  pipeline.workers: 2
+
+- pipeline.id: java-app-pipeline
+  path.config: "/usr/share/logstash/pipeline/20-java-app.conf"
+  pipeline.workers: 2

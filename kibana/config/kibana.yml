@@ -1,0 +1,9 @@
+server.host: "0.0.0.0"
+elasticsearch.hosts: ["https://elasticsearch:9200"]
+
+# Kibana'nın Elasticsearch'e bağlanabilmesi için doğru kullanıcı adı ve şifreyi belirtin
+elasticsearch.username: "kibana_system"  # Kibana'nın Elasticsearch'e bağlanması için doğru kullanıcı adı
+elasticsearch.password: "${KIBANA_SYSTEM_PASSWORD}"  # .env dosyasından alınacak şifre
+
+elasticsearch.ssl.certificateAuthorities: ["/usr/share/kibana/config/certs/elastic-stack-ca.crt"]
+elasticsearch.ssl.verificationMode: "certificate"  # SSL doğrulaması yapacak

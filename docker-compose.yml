@@ -1,0 +1,138 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    container_name: elasticsearch
+    environment:
+      # Bu parolalar hem ilk kurulum hem de setup servisi için gereklidir
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+      - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      - ./certs:/usr/share/elasticsearch/config/certs
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - elk-net
+    healthcheck:
+      # Bu sağlık kontrolü, 'setup' servisinin ne zaman başlayacağını belirler
+      test: ["CMD-SHELL", "curl -k -u elastic:${ELASTIC_PASSWORD} https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+      start_period: 60s
+
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
+    container_name: setup
+    user: "0"
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+      - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
+    command: >
+      bash -c '
+        echo "Waiting for Elasticsearch to be healthy..."
+        # Elasticsearch sağlık kontrolünü geçene kadar bekle
+        until curl -s -k -u "elastic:$${ELASTIC_PASSWORD}" https://elasticsearch:9200/_cluster/health 2>&1 | grep -q "yellow\|green"; do
+          echo "Elasticsearch is unavailable - sleeping"
+          sleep 5
+        done
+        
+        echo "Elasticsearch is up - setting passwords"
+        
+        echo "Setting kibana_system password..."
+        RESULT=$$(curl -X POST "https://elasticsearch:9200/_security/user/kibana_system/_password" \
+          -k -u "elastic:$${ELASTIC_PASSWORD}" \
+          -H "Content-Type: application/json" \
+          -d "{\"password\":\"$${KIBANA_SYSTEM_PASSWORD}\"}" \
+          -w "\n%{http_code}" -s)
+        
+        HTTP_CODE=$$(echo "$$RESULT" | tail -n1)
+        if [ "$$HTTP_CODE" -eq 200 ]; then
+          echo "✓ kibana_system password set successfully!"
+        else
+          echo "✗ Failed to set kibana_system password. HTTP Code: $$HTTP_CODE"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
+        
+        echo "Setting logstash_system password..."
+        RESULT=$$(curl -X POST "https://elasticsearch:9200/_security/user/logstash_system/_password" \
+          -k -u "elastic:$${ELASTIC_PASSWORD}" \
+          -H "Content-Type: application/json" \
+          -d "{\"password\":\"$${LOGSTASH_SYSTEM_PASSWORD}\"}" \
+          -w "\n%{http_code}" -s)
+        
+        HTTP_CODE=$$(echo "$$RESULT" | tail -n1)
+        if [ "$$HTTP_CODE" -eq 200 ]; then
+          echo "✓ logstash_system password set successfully!"
+        else
+          echo "✗ Failed to set logstash_system password. HTTP Code: $$HTTP_CODE"
+          echo "Response: $$RESULT"
+          exit 1
+        fi
+        
+        echo "✓ All passwords configured successfully!"
+      '
+    networks:
+      - elk-net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
+    container_name: kibana
+    user: "0" 
+    command: ["kibana", "--allow-root"]
+    environment:
+      - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml
+      - ./certs/elastic-stack-ca.crt:/usr/share/kibana/config/certs/elastic-stack-ca.crt
+    ports:
+      - "5601:5601"
+    networks:
+      - elk-net
+    depends_on:
+      setup:
+        # Şifreler ayarlanmadan Kibana'yı başlatma
+        condition: service_completed_successfully
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
+    container_name: logstash
+    user: "0"
+    environment:
+      - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
+    volumes:
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./certs/elastic-stack-ca.crt:/usr/share/logstash/config/certs/elastic-stack-ca.crt
+    ports:
+      - "5001:5001"
+      - "5002:5002"
+    networks:
+      - elk-net
+    depends_on:
+      setup:
+         # Şifreler ayarlanmadan Logstash'i başlatma
+        condition: service_completed_successfully
+
+volumes:
+  es-data:
+    driver: local
+
+networks:
+  elk-net:
+    driver: bridge
