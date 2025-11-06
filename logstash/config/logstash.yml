@@ -1,1 +1,5 @@
-http.host: "0.0.0.0"
+# 'http.host' ayarı 'api.http.host' olarak değiştirildi (v9.x değişikliği)
+api.http.host: "0.0.0.0"
+
+# Görselden eklediğimiz ayar (bu doğru, kalmalı)
+node.name: logstash-node

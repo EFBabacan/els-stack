@@ -1,0 +1,7 @@
+#Filebeat'in Fortinet modülünü aktif eder
+- module: fortinet
+  firewall:
+    enabled: true
+    var.input: udp
+    var.syslog_host: 0.0.0.0
+    var.syslog_port: 9004

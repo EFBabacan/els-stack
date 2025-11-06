@@ -110,7 +110,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
     container_name: logstash
-    user: "0"
+    user: "1000:0" # User 1000 (logstash), Group 0 (root)
     environment:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
@@ -136,22 +136,49 @@ services:
     container_name: filebeat
     user: "0" 
     volumes:
+      # :ro (read-only) ekini kaldırıyoruz ki chmod komutu çalışabilsin
       - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      
+      # Fortinet modülünü ekliyoruz
+      - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      
+      # SSL sertifikasını bağlıyoruz
       - ./certs/elastic-stack-ca.crt:/usr/share/filebeat/certs/elastic-stack-ca.crt:ro
+      
+      # Host makinedeki log dizinlerini konteynere bağlıyoruz
       - ./logs/nginx:/var/log/nginx:ro
       - ./logs/java-app:/var/log/java-app:ro
+      
+      # Filebeat'in kendi verilerini tutması için
       - filebeat-data:/usr/share/filebeat/data
       
+    # --- DEĞİŞİKLİK 1 (command:) ---
     command: >
       bash -c "
         echo 'Fixing file permissions...';
+        
+        # Modüllerin kurulması için bir kerelik kurulum komutu
+        filebeat setup -e
+        
+        
+        # filebeat.yml için izinleri 
         chmod go-w /usr/share/filebeat/filebeat.yml;
+        
+        # fortinet.yml için izinleri  (Loglarda tespit edilen izin hatası için)
+        chmod go-w /usr/share/filebeat/modules.d/fortinet.yml;
+        
+        
         echo 'Starting Filebeat...';
         filebeat -e
       "
       
     networks:
       - elk-net
+      
+    # --- DEĞİŞİKLİK 2 (ports:) ---
+    ports:
+      - "9004:9004/udp"
+      
     depends_on:
       logstash:
         condition: service_started
