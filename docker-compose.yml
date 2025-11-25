@@ -3,7 +3,6 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}
     container_name: elasticsearch
     environment:
-      # Bu parolalar hem ilk kurulum hem de setup servisi için gereklidir
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
@@ -23,7 +22,6 @@ services:
     networks:
       - elk-net
     healthcheck:
-      # Bu sağlık kontrolü, 'setup' servisinin ne zaman başlayacağını belirler
       test: ["CMD-SHELL", "curl -k -u elastic:${ELASTIC_PASSWORD} https://localhost:9200/_cluster/health | grep -q '\"status\":\"green\\|yellow\"'"]
       interval: 10s
       timeout: 10s
@@ -40,16 +38,15 @@ services:
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
     command: >
       bash -c '
-        echo "Waiting for Elasticsearch to be healthy..."
-        # Elasticsearch sağlık kontrolünü geçene kadar bekle
+        echo "Elasticsearch bekleniyor..."
         until curl -s -k -u "elastic:$${ELASTIC_PASSWORD}" https://elasticsearch:9200/_cluster/health 2>&1 | grep -q "yellow\|green"; do
-          echo "Elasticsearch is unavailable - sleeping"
+          echo "Elasticsearch hazır değil - bekleniyor..."
           sleep 5
         done
         
-        echo "Elasticsearch is up - setting passwords"
+        echo "Elasticsearch hazır - şifreler ayarlanıyor..."
         
-        echo "Setting kibana_system password..."
+        echo "kibana_system şifresi ayarlanıyor..."
         RESULT=$$(curl -X POST "https://elasticsearch:9200/_security/user/kibana_system/_password" \
           -k -u "elastic:$${ELASTIC_PASSWORD}" \
           -H "Content-Type: application/json" \
@@ -58,14 +55,14 @@ services:
         
         HTTP_CODE=$$(echo "$$RESULT" | tail -n1)
         if [ "$$HTTP_CODE" -eq 200 ]; then
-          echo "✓ kibana_system password set successfully!"
+          echo "✓ kibana_system şifresi başarıyla ayarlandı!"
         else
-          echo "✗ Failed to set kibana_system password. HTTP Code: $$HTTP_CODE"
-          echo "Response: $$RESULT"
+          echo "✗ kibana_system şifresi ayarlanamadı. HTTP Kodu: $$HTTP_CODE"
+          echo "Yanıt: $$RESULT"
           exit 1
         fi
         
-        echo "Setting logstash_system password..."
+        echo "logstash_system şifresi ayarlanıyor..."
         RESULT=$$(curl -X POST "https://elasticsearch:9200/_security/user/logstash_system/_password" \
           -k -u "elastic:$${ELASTIC_PASSWORD}" \
           -H "Content-Type: application/json" \
@@ -74,14 +71,14 @@ services:
         
         HTTP_CODE=$$(echo "$$RESULT" | tail -n1)
         if [ "$$HTTP_CODE" -eq 200 ]; then
-          echo "✓ logstash_system password set successfully!"
+          echo "✓ logstash_system şifresi başarıyla ayarlandı!"
         else
-          echo "✗ Failed to set logstash_system password. HTTP Code: $$HTTP_CODE"
-          echo "Response: $$RESULT"
+          echo "✗ logstash_system şifresi ayarlanamadı. HTTP Kodu: $$HTTP_CODE"
+          echo "Yanıt: $$RESULT"
           exit 1
         fi
         
-        echo "✓ All passwords configured successfully!"
+        echo "✓ Tüm şifreler başarıyla yapılandırıldı!"
       '
     networks:
       - elk-net
@@ -110,13 +107,24 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
     container_name: logstash
-    user: "1000:0" # User 1000 (logstash), Group 0 (root)
+    user: "0"
     environment:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
       - GMAIL_USERNAME=${GMAIL_USERNAME}
       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
       - TZ=Europe/Istanbul
+    
+    # gosu yerine su-exec kullan (Alpine tabanlı) veya direkt chown + runuser
+    entrypoint: >
+      bash -c "
+        echo 'Sertifika izinleri düzeltiliyor...';
+        chown -R logstash:logstash /usr/share/logstash/config/certs/;
+        chmod 644 /usr/share/logstash/config/certs/elastic-stack-ca.crt;
+        echo 'Logstash başlatılıyor...';
+        runuser -u logstash -- /usr/local/bin/docker-entrypoint
+      "
+      
     volumes:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
       - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
@@ -134,50 +142,30 @@ services:
   filebeat:
     image: docker.elastic.co/beats/filebeat:${ELASTIC_VERSION}
     container_name: filebeat
-    user: "0" 
+    user: "0"
     volumes:
-      # :ro (read-only) ekini kaldırıyoruz ki chmod komutu çalışabilsin
       - ./filebeat/config/filebeat.yml:/usr/share/filebeat/filebeat.yml
-      
-      # Fortinet modülünü ekliyoruz
-      - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
-      
-      # SSL sertifikasını bağlıyoruz
+      - ./filebeat/modules.d:/usr/share/filebeat/modules.d
       - ./certs/elastic-stack-ca.crt:/usr/share/filebeat/certs/elastic-stack-ca.crt:ro
-      
-      # Host makinedeki log dizinlerini konteynere bağlıyoruz
       - ./logs/nginx:/var/log/nginx:ro
       - ./logs/java-app:/var/log/java-app:ro
-      
-      # Filebeat'in kendi verilerini tutması için
       - filebeat-data:/usr/share/filebeat/data
       
-    # --- DEĞİŞİKLİK 1 (command:) ---
+    # ÇİFT TİRE KULLAN: --strict.perms değil -strict.perms
     command: >
       bash -c "
-        echo 'Fixing file permissions...';
-        
-        # Modüllerin kurulması için bir kerelik kurulum komutu
-        filebeat setup -e
-        
-        
-        # filebeat.yml için izinleri 
-        chmod go-w /usr/share/filebeat/filebeat.yml;
-        
-        # fortinet.yml için izinleri  (Loglarda tespit edilen izin hatası için)
-        chmod go-w /usr/share/filebeat/modules.d/fortinet.yml;
-        
-        
-        echo 'Starting Filebeat...';
-        filebeat -e
+        echo 'Dosya izinleri düzeltiliyor...';
+        chmod 644 /usr/share/filebeat/filebeat.yml;
+        chmod 644 /usr/share/filebeat/modules.d/*.yml;
+        echo 'Filebeat başlatılıyor...';
+        filebeat -e --strict.perms=false
       "
+      
+    ports:
+      - "9004:9004/udp"
       
     networks:
       - elk-net
-      
-    # --- DEĞİŞİKLİK 2 (ports:) ---
-    ports:
-      - "9004:9004/udp"
       
     depends_on:
       logstash:

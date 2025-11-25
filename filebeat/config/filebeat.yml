@@ -5,35 +5,40 @@ setup.template.enabled: false
 # =====================================================================
 # ======================== Filebeat inputs =========================
 filebeat.inputs:
-
-  # Nginx logları için Filestream input
   - type: filestream
     id: nginx-logs
     enabled: true
     paths:
       - /var/log/nginx/*.log
-    tags: ["nginx"]
     fields:
       log_type: nginx
-    fields_under_root: true
+    # Küçük dosyaları da oku
+    prospector:
+      scanner:
+        fingerprint:
+          length: 256
+          offset: 0
 
-  # Java uygulama logları için Filestream input
   - type: filestream
     id: java-logs
     enabled: true
     paths:
       - /var/log/java-app/*.log
-    tags: ["java"]
     fields:
       log_type: java
-    fields_under_root: true
-    
-    # JSON ayarları 'parsers' altına taşındı
-    parsers:
-      - ndjson:
-          keys_under_root: true
-          add_error_key: true
-          message_key: log
+    prospector:
+      scanner:
+        fingerprint:
+          length: 256
+          offset: 0
+
+# Fortinet modülü için
+filebeat.modules:
+  - module: fortinet
+    firewall:
+      enabled: true
+      var.syslog_host: 0.0.0.0
+      var.syslog_port: 9004
 
 # ======================== Filebeat modules =========================
 filebeat.config.modules:
