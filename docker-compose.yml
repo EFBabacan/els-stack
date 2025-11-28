@@ -107,7 +107,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}
     container_name: logstash
-    user: "0"
+    # user: "0"  <-- BU SATIRI SİL (veya yorum satırı yap)
     environment:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LOGSTASH_SYSTEM_PASSWORD=${LOGSTASH_SYSTEM_PASSWORD}
@@ -115,15 +115,9 @@ services:
       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
       - TZ=Europe/Istanbul
     
-    # gosu yerine su-exec kullan (Alpine tabanlı) veya direkt chown + runuser
-    entrypoint: >
-      bash -c "
-        echo 'Sertifika izinleri düzeltiliyor...';
-        chown -R logstash:logstash /usr/share/logstash/config/certs/;
-        chmod 644 /usr/share/logstash/config/certs/elastic-stack-ca.crt;
-        echo 'Logstash başlatılıyor...';
-        runuser -u logstash -- /usr/local/bin/docker-entrypoint
-      "
+    # entrypoint kısmını TAMAMEN SİL. Varsayılan entrypoint çalışsın.
+    # entrypoint: >
+    #   bash -c "..."
       
     volumes:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
